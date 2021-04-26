@@ -1,7 +1,7 @@
 package com.test.geodata.controller;
 
-import com.test.geodata.domain.GeodataStructure;
-import com.test.geodata.domain.Geojson;
+import com.test.geodata.model.GeoData;
+import com.test.geodata.model.LatLon;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -18,13 +18,18 @@ import java.util.*;
 
 @RestController
 public class GeodataController {
-    private Map<String,List<GeodataStructure>> cash = new HashMap<>();
+    private Map<String,List<GeoData>> cash = new HashMap<>();
 
     CloseableHttpClient client = HttpClientBuilder.create().build();
 
     @RequestMapping(value = "/osm")
-    public Object getRegion(@RequestParam String region) throws IOException {
+    public List<GeoData> getRegion(@RequestParam String region /*,@RequestParam String district*/) throws IOException {
+
         if(cash.get(region)!=null)return cash.get(region);//кэширование;
+
+        //TODO: сделать ещё один вид запроса
+//        if(district == null) System.out.println(true);
+//        else System.out.println(false);
 
         //клиент запрашивает данные и преобразует их в формат String;
         CloseableHttpResponse response = client.execute(new HttpGet("https://nominatim.openstreetmap.org/search?state="+ URLEncoder.encode(region, StandardCharsets.UTF_8.toString())+"&country=russia&format=json&polygon_geojson=1"));
@@ -32,41 +37,41 @@ public class GeodataController {
         String result = EntityUtils.toString(entity);
 
         //Создаём список на основе структуры json
-        List<GeodataStructure> geodataStructures = new ArrayList<>();
+        List<GeoData> geoDataList = new ArrayList<>();
 
-        //Но json заключён в массив и нам нужно массив рапарсить чтобы достать json;
         JSONArray array = new JSONArray(result);
+
+        if(array == null || array.length()<1) return null;
+
         for (int i = 0; i < array.length(); i++) {
+
             JSONObject jsonobjectFirst = array.getJSONObject(i);//работаем с каждым элементом массива в JsonObject;
+
             double lat = jsonobjectFirst.getDouble("lat");
             double lon = jsonobjectFirst.getDouble("lon");
+
             String displayName = jsonobjectFirst.getString("display_name");
+            JSONObject geojson = jsonobjectFirst.getJSONObject("geojson");
+            GeoData geoData = new GeoData(lat, lon, displayName);
 
-            //Второй json. Не получилось создать сущность этого класса в GeodataStructure, но может и не нужно это,
-            // но как-то не логично;
-            List<Geojson> geojsons = new ArrayList<>();
+            JSONArray latLons = geojson.getJSONArray("coordinates")
+                    .getJSONArray(0)
+                    .getJSONArray(0);
 
-            //Из второга json парсим параметры;
-            JSONObject jsonobjectSecond = jsonobjectFirst.getJSONObject("geojson");
-            String type = jsonobjectSecond.getString("type");
+            for(int j = 0; j<latLons.length(); j++){
 
-            //Но коордиаты во втором JsonObject это многомерный массив. Данные были видны при формате BigDecimal,
-            //мне нужно добраться до полигонов, чтобы найти наибольший, поэтому BigDecimal не подходит и нужно парсить
-            // дальше;
-//            JSONArray arrayCoordinates = new JSONObject("geojson").getJSONArray("coordinates").getJSONArray(0);
-//            System.out.println(arrayCoordinates.get(0).toString());
+                JSONArray jsonobjectSecond = latLons.getJSONArray(j);
+                double lat1 = jsonobjectSecond.getDouble(0);
+                double lon1 = jsonobjectSecond.getDouble(1);
 
-            //Добавляем geodataStructure и geojson в их списки, как добавить coorditates пока не ясно;
-            geodataStructures.add(new GeodataStructure(lat,lon,displayName));
-            geojsons.add(new Geojson(type));
+                geoData.addLatLon(new LatLon(lat1, lon1));
 
-            //Вывод GeodataStructure;
-            System.out.println(lat + " " + lon + " " + displayName);
-            //Вывод Geojson, но только в консоль;
-            System.out.println(type);
+            }
+
+            geoDataList.add(geoData);
         }
 
-        cash.put(region,geodataStructures);//кэширование;
-        return geodataStructures;
+        cash.put(region,geoDataList);//кэширование;
+        return geoDataList;
     }
 }
