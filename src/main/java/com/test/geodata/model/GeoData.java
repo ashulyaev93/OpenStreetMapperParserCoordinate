@@ -5,11 +5,11 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class GeoData {
-    private List<LatLon> coordinatesList = new ArrayList<>();
-    private double[][] coordinates;
     private double lat;
     private double lon;
     private String displayName;
+    private List<LatLon> coordinatesList = new ArrayList<>();
+    private double[][] coordinates;
 
     public GeoData(double lat, double lon, String displayName){
         this.lat = lat;
